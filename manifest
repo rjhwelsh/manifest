@@ -1,0 +1,128 @@
+#!/bin/bash
+# manifest - Signs and verifies the integrity of files in pwd
+# Copyright (C) 2022,  Roger Welsh <rjhwelsh@posteo.net>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# General purpose manifest generator
+# Default behaviour is to hide checksums with gpg
+# Checking can only be performed by the intended recipient
+
+# Uncomment to debug bashscript
+# set -x
+
+CKSUM=sha256
+
+GPGOPTS=()
+GPGOPTS+=("--default-recipient-self")
+GPGOPTS+=("--armor")
+
+function signec() {
+    # Sign and encrypt
+    find \
+        -iname "${OFILE}" -prune \
+        -o -type f -print0 |\
+        xargs -0 ${CKSUM}sum|\
+        gpg --encrypt --sign \
+        "${GPGOPTS[@]}" - \
+        > ${OFILE}
+    }
+
+function verify() {
+    gpg --decrypt ${OFILE} |\
+        ${CKSUM}sum -c --quiet && \
+        echo ${CKSUM}sum: OK || echo ${CKSUM}sum: FAIL
+}
+
+function help(){
+        echo "
+Manifest Generator
+
+-h,--help,-?            This help message
+
+ACTIONS
+-c,--check,--verify     Verify the manifest file in pwd
+-s,--sign               Sign the manifest in pwd
+
+GPG OPTIONS
+-r,--recipient          GPG recipient
+-u,--local-user         GPG local-user
+"
+}
+
+declare -a PARAMS
+
+while (( "$#" )); do
+    case "$1" in
+        -h|--help|\\\?|-\?)
+            help
+            exit 0
+            ;;
+        -c|--check|--verify)
+            ACTION=verify
+            shift 1
+            ;;
+        -s|--sign)
+            ACTION=signec
+            shift 1
+            ;;
+        -r|--recipient)
+            GPGOPTS+=("--recipient" "${2}")
+            shift 2
+            ;;
+        -u|--local-user)
+            GPGOPTS+=("--local-user" "${2}")
+            shift 2
+            ;;
+        --) # end argument parsing
+            shift
+            break
+            ;;
+        -*|--*=) # unsupported flags
+        echo "Error: Unsupported flag $1" >&2
+        exit 1
+        ;;
+        *) # preserve positional arguments (in array)
+            PARAMS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Add remaining positional arguments
+PARAMS+=( "$@" )
+
+# set positional arguments
+set -- "${PARAMS[@]}"
+
+
+# First parameter
+[[ -n "${1}" ]] && OFILE="${1}"
+: ${OFILE:=.manifest.${CKSUM}.asc}
+shift 1
+
+# Perform actions
+case "${ACTION}" in
+    verify)
+        verify
+        ;;
+    signec)
+        signec
+        ;;
+    *)
+        echo "ERROR: Please select an ACTION!"
+        help
+        exit 1
+        ;;
+    esac
