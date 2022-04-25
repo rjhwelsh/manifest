@@ -36,11 +36,11 @@ function signec() {
         xargs -0 ${CKSUM}sum|\
         gpg --encrypt --sign \
         "${GPGOPTS[@]}" - \
-        > ${OFILE}
+        > "${OFILE}"
     }
 
 function verify() {
-    gpg --decrypt ${OFILE} |\
+    gpg --decrypt "${OFILE}" |\
         ${CKSUM}sum -c --quiet && \
         echo ${CKSUM}sum: OK || echo ${CKSUM}sum: FAIL
 }
